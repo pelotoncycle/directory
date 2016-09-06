@@ -503,7 +503,6 @@ make_new_entry(PyTypeObject *type, struct dirent *entry, PyObject *path) {
   entry_object->d_name = NULL;
   entry_object->path = path;
   Py_INCREF(path);
-  //Py_INCREF(entry_object);
 return entry_object;
  error:
   return NULL;

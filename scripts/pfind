@@ -2,12 +2,12 @@
 
 import sys
 from threading import Thread, Lock
-from Queue import Queue
+from Queue import PriorityQueue
 from directory import DT_REG, Directory, DT_DIR
 import os
 
 THREADS = 20
-queue = Queue()
+queue = PriorityQueue()
 
 class Flagman(object):
    # Named after the traffic control workers who manage two way
@@ -45,7 +45,7 @@ REJECT = frozenset(['.', '..'])
 def worker():
    try:
       while True:
-         directory = queue.get()
+         inode, directory = queue.get()
          for entry in directory:
 
             if entry.d_name() in REJECT:
@@ -54,7 +54,7 @@ def worker():
                sys.stdout.write(entry.pfind_str());
             if entry.d_type() == DT_DIR:
                flagman_lock.acquire()
-               queue.put(entry.directory())
+               queue.put((entry.d_ino(), entry.directory()))
                continue 
          flagman_lock.release()
    except:
@@ -74,11 +74,8 @@ if __name__ == "__main__":
       thread.daemon = True
       thread.start()
       
-   queue.put(Directory(path))
+   queue.put((0, Directory(path)))
    flagman_lock.wait()
-   from collections import Counter
-   import gc
-   print >>sys.stderr, Counter(type(o) for o in gc.get_objects()).most_common()
    
    
 

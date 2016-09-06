@@ -53,6 +53,7 @@ make_new_entry(PyTypeObject *type, struct dirent *entry, PyObject *path);
 
 static void directory_type_dealloc(DirectoryObject *dir) {
   Py_XDECREF(dir->path);
+  PyObject_Del(dir);
 }
 
 static void directory_iter_type_dealloc(DirectoryIterObject *di) { 
@@ -62,6 +63,7 @@ static void directory_iter_type_dealloc(DirectoryIterObject *di) {
     Py_END_ALLOW_THREADS
   }
   Py_XDECREF(di->path);
+  PyObject_Del(di);
 }
 
 static void entrytype_dealloc(EntryObject *entry) {
@@ -69,6 +71,7 @@ static void entrytype_dealloc(EntryObject *entry) {
    Py_XDECREF(entry->d_type);
    Py_XDECREF(entry->d_name);
    Py_XDECREF(entry->path);
+   PyObject_Del(entry);
 }
 
 

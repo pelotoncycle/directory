@@ -73,8 +73,12 @@ if __name__ == "__main__":
       thread = Thread(target=worker)
       thread.daemon = True
       thread.start()
+      
    queue.put(Directory(path))
    flagman_lock.wait()
+   from collections import Counter
+   import gc
+   print >>sys.stderr, Counter(type(o) for o in gc.get_objects()).most_common()
    
    
 

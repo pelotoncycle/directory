@@ -1,12 +1,10 @@
-#include<Python.h>
-
-#include <sys/types.h>
+#include <Python.h>
 #include <dirent.h>
-#include <fileobject.h>
-#include <sys/types.h>
-#include <sys/stat.h>
 #include <fcntl.h>
-
+#include <fileobject.h>
+#include <stdio.h>
+#include <sys/stat.h>
+#include <sys/types.h>
 
 PyObject *dt_blk = NULL;
 PyObject *dt_chr = NULL;
@@ -21,6 +19,7 @@ PyObject *dt_unknown = NULL;
 typedef struct _directory_object DirectoryObject;
 struct _directory_object {
   PyObject HEAD;
+  int dirp;
   PyObject *path;
 };
 
@@ -53,6 +52,11 @@ make_new_entry(PyTypeObject *type, struct dirent *entry, PyObject *path);
 
 static void directory_type_dealloc(DirectoryObject *dir) {
   Py_XDECREF(dir->path);
+  if (dir->dirp != -1) {
+    Py_BEGIN_ALLOW_THREADS
+    close(dir->dirp);
+    Py_END_ALLOW_THREADS
+  }
   PyObject_Del(dir);
 }
 
@@ -193,8 +197,41 @@ entry_directory(EntryObject *self, PyObject *_) {
   strcpy(buffer + PyString_Size(self->path) + 1, &self->dirent.d_name);
   return make_new_directory(NULL, buffer);
 }
-   
 
+PyObject *
+directory_open(DirectoryObject *self, PyObject *py_name) {
+  FILE *fp = NULL;
+  int fd=-1;
+  char *name = NULL;
+  char *path = NULL;
+  if (!PyString_Check(py_name)) {
+    PyErr_SetString(PyExc_TypeError,
+		    "Directory.open(...) must be called with a str");
+    return NULL;
+  }
+  path = PyString_AsString(self->path);
+  name = PyString_AsString(py_name);
+  Py_BEGIN_ALLOW_THREADS
+  
+  if (self->dirp == -1)
+    self->dirp = open(path, O_DIRECTORY | O_RDONLY);
+  if (self->dirp != -1)
+    fd = openat(self->dirp, name, O_CREAT | O_RDWR, 0777);
+  if (fd != -1)
+    fp = fdopen(fd, "r+");
+  Py_END_ALLOW_THREADS
+
+  if (self->dirp == -1 || fd == -1 || !fp)
+    return PyErr_SetFromErrno(PyExc_IOError);
+  char *buffer = alloca(PyString_Size(self->path) + strlen(name) + 2);
+  strcpy(buffer, PyString_AsString(self->path));
+  buffer[PyString_Size(self->path)] = '/';
+  strcpy(buffer + PyString_Size(self->path) + 1, name);
+
+  return PyFile_FromFile(fp, buffer, "w+", fclose);
+}
+
+    
 PyObject *
 entry_repr(EntryObject *self) {
   PyObject *path_repr = NULL;
@@ -257,9 +294,11 @@ entry_repr(EntryObject *self) {
   Py_XDECREF(name);
   Py_XDECREF(name_repr);
   return NULL;
-}
-  
+};
 
+static PyMethodDef directory_methods[] = {
+  {"open", (PyCFunction)directory_open, METH_O, NULL},
+  {NULL, NULL}};
 
 PyTypeObject DirectoryType = {
   PyVarObject_HEAD_INIT(&PyType_Type, 0)
@@ -289,7 +328,7 @@ PyTypeObject DirectoryType = {
   0, /* tp_weaklistoffset */
   directory_iter, /* tp_iter */
   0, /* tp_iternext */
-  0, /* tp_methods */
+  directory_methods, /* tp_methods */
   0, /* tp_members */
   0, /* tp_genset */
   0, /* tp_base */
@@ -492,6 +531,7 @@ make_new_directory(PyTypeObject *type, char *path) {
   }
       
   directory->path = path_object;
+  directory->dirp = -1;
   return directory;
  error:
   Py_XDECREF(path_object);

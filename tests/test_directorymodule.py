@@ -25,6 +25,11 @@ class TestDirectory(TestCase):
             [e.d_name() for e in elements['d2'].directory()],
             ['.', '..', '2.txt', '3.txt'])
 
+    def test_directory_open(self):
+        self.assertEquals(
+            Directory(PATH).open('README').read(),
+            open(os.path.join(PATH, 'README')).read())
+
 
         
         

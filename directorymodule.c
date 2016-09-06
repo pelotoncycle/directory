@@ -147,7 +147,7 @@ directory_repr(DirectoryObject *self) {
   PyObject *repr = PyObject_Repr(self->path);
   if (!repr)
     goto error;
-  buffer = alloca(PyString_Size + strlen(template) + 1);
+  buffer = alloca(PyString_Size(repr) + strlen(template) + 1);
   sprintf(buffer, template, PyString_AsString(repr));
   Py_DECREF(repr);
   return PyString_FromString(buffer);

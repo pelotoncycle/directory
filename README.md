@@ -22,6 +22,11 @@ Interpreter Lock around `opendir` and `readdir` calls and building a
 parallel tree walker `pfind` we're able to keep more than one I/O
 operation relating to the directory scan in flight at a time.
 
+
+## Installation
+
+`pip install directory`
+
 ## Usage
 
 To start a directory scan, import `Directory` from the `directory`

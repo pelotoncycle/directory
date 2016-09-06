@@ -1,6 +1,5 @@
 #!/usr/bin/python
 
-import psutil
 import sys
 from threading import Thread, Lock
 from Queue import Queue

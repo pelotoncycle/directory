@@ -117,5 +117,5 @@ repository, it produces something like this:
 The Peloton leaderboared database consists of 240M files of a few
 dozen kb in size spread across 66k directories.  `find . -type -print`
 requires 64 minutes to scan this on a development copy stored on a
-32Gb i7 with a single 8Tb seagate archivist drive; the same operation
+32Gb i7 with a single 8Tb seagate archive drive; the same operation
 requires `pfind` 52 minutes.

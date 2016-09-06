@@ -201,7 +201,7 @@ entry_directory(EntryObject *self, PyObject *_) {
 PyObject *
 directory_open(DirectoryObject *self, PyObject *py_name) {
   FILE *fp = NULL;
-  int fd=-1;
+  int fd = -1;
   char *name = NULL;
   char *path = NULL;
   if (!PyString_Check(py_name)) {

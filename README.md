@@ -83,7 +83,8 @@ scan, and emits to `stdout` a tab delimited text file listing the
 `inode` number and file path.  If run against this module's git
 repository, it produces something like this:
 
-`# pfind directory
+```
+# pfind directory
 39979103        ./setup.py
 39979106        ./.gitignore
 39979100        ./directorymodule.c

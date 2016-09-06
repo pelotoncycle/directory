@@ -1,0 +1,85 @@
+#!/usr/bin/python
+
+import psutil
+import sys
+from threading import Thread, Lock
+from Queue import Queue
+from directory import DT_REG, Directory, DT_DIR
+import os
+
+THREADS = 20
+queue = Queue()
+
+class Flagman(object):
+   # Named after the traffic control workers who manage two way
+   # traffic on blind single way roads.  They count the cars going in
+   # and blocking opposing traffic until the same number have exited.
+
+   def __init__(self):
+      self.count_lock = Lock()
+      self.completion_lock = Lock()
+      self.count = 0
+
+   def acquire(self):
+      with self.count_lock:
+         if not self.count:
+            self.completion_lock.acquire()
+         self.count += 1
+
+   def release(self):
+      with self.count_lock:
+         if self.count == 0:
+            return 
+         self.count -= 1
+         if self.count == 0:
+            self.completion_lock.release()
+
+   def wait(self):
+      self.completion_lock.acquire()
+      self.completion_lock.release()
+
+
+flagman_lock = Flagman()
+
+REJECT = frozenset(['.', '..'])
+
+def worker():
+   try:
+      while True:
+         directory = queue.get()
+         for entry in directory:
+
+            if entry.d_name() in REJECT:
+               continue 
+            if entry.d_type() == DT_REG:
+               sys.stdout.write(entry.pfind_str());
+            if entry.d_type() == DT_DIR:
+               flagman_lock.acquire()
+               queue.put(entry.directory())
+               continue 
+         flagman_lock.release()
+   except:
+      pass
+      
+if __name__ == "__main__":
+   if len(sys.argv) != 2:
+      print >>sys.stderr, "Parallel Find"
+      print >>sys.stderr, "Usage: pfind path"
+      sys.exit(1)
+
+   path = sys.argv[-1]
+   
+   flagman_lock.acquire()
+   for _ in xrange(THREADS):
+      thread = Thread(target=worker)
+      thread.daemon = True
+      thread.start()
+   queue.put(Directory(path))
+   flagman_lock.wait()
+   
+   
+
+   
+   
+   
+   

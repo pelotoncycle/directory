@@ -7,7 +7,7 @@ setup(name='directory',
       author = 'Adam DePrince',
       author_email = 'adam@pelotoncycle.com',
       url = 'https://github.com/pelotoncycle/dir',
-      version='0.0.6',
+      version='0.0.7',
 
       description="Expose opendir/readdir/closedir",
       scripts=[

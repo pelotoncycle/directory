@@ -10,6 +10,9 @@ PATH = os.path.join(os.path.dirname(__file__), 'data')
 class TestDirectory(TestCase):
     maxDiff = None
 
+    def test_directory_path(self):
+        self.assertEquals(Directory(PATH).path(), PATH)
+
     def test_open_with_path(self):
         directory = Directory(PATH)
         directory_iter = iter(directory)

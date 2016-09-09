@@ -170,6 +170,12 @@ directory_iter_repr(DirectoryObject *self) {
   return NULL;
 }
 
+PyObject *
+directory_path(DirectoryObject *self, PyObject *_){
+  Py_INCREF(self->path);
+  return self->path;
+}
+
 
 PyObject *
 entry_d_name(EntryObject *self, PyObject *_) {
@@ -303,6 +309,7 @@ entry_repr(EntryObject *self) {
 
 static PyMethodDef directory_methods[] = {
   {"open", (PyCFunction)directory_open, METH_O, NULL},
+  {"path", (PyCFunction)directory_path, METH_NOARGS, NULL},
   {NULL, NULL}};
 
 PyTypeObject DirectoryType = {

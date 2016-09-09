@@ -146,7 +146,7 @@ directory_repr(DirectoryObject *self) {
   PyObject *repr = PyObject_Repr(self->path);
   if (!repr)
     goto error;
-  buffer = alloca(PyString_Size(repr) + strlen(template) + 1);
+  buffer = alloca(PyString_Size(self->path) + strlen(template) + 1);
   sprintf(buffer, template, PyString_AsString(repr));
   Py_DECREF(repr);
   return PyString_FromString(buffer);
@@ -490,12 +490,12 @@ entry_d_type(EntryObject *self, PyObject *_) {
 
 static PyMethodDef entry_methods[] = {
   {"d_ino", (PyCFunction)entry_d_ino, METH_NOARGS, NULL},
-  {"d_type", (PyCFunction)entry_d_type, METH_NOARGS, NULL},
   {"d_name", (PyCFunction)entry_d_name, METH_NOARGS, NULL},
-  {"path", (PyCFunction)entry_path, METH_NOARGS, NULL},
+  {"d_type", (PyCFunction)entry_d_type, METH_NOARGS, NULL},
   {"directory", (PyCFunction)entry_directory, METH_NOARGS, NULL},
-  {"pfind_str", (PyCFunction)entry_pfind_str, METH_NOARGS, NULL},
   {"open", (PyCFunction)entry_open, METH_NOARGS, NULL},
+  {"path", (PyCFunction)entry_path, METH_NOARGS, NULL},
+  {"pfind_str", (PyCFunction)entry_pfind_str, METH_NOARGS, NULL},
   {NULL, NULL}};
 
 PyTypeObject EntryType = {

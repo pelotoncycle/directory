@@ -34,10 +34,10 @@ typedef struct _entryobject EntryObject;
 struct _entryobject {
   PyObject HEAD;
   struct dirent dirent;
+  PyObject *directory_iter;
   PyObject *d_ino;
   PyObject *d_type;
   PyObject *d_name;
-  PyObject *path;
 };
 
 
@@ -48,7 +48,7 @@ PyObject *
 make_new_directory_iter(PyTypeObject *type, PyObject *path);
 
 PyObject *
-make_new_entry(PyTypeObject *type, struct dirent *entry, PyObject *path);
+make_new_entry(PyTypeObject *type, struct dirent *entry, PyObject *directory_iter);
 
 static void directory_type_dealloc(DirectoryObject *dir) {
   Py_XDECREF(dir->path);
@@ -71,10 +71,10 @@ static void directory_iter_type_dealloc(DirectoryIterObject *di) {
 }
 
 static void entrytype_dealloc(EntryObject *entry) {
+   Py_XDECREF(entry->directory_iter);
    Py_XDECREF(entry->d_ino);
    Py_XDECREF(entry->d_type);
    Py_XDECREF(entry->d_name);
-   Py_XDECREF(entry->path);
    PyObject_Del(entry);
 }
 
@@ -102,7 +102,7 @@ directory_new(PyTypeObject *type, PyObject *args, PyObject **kwargs)
 {
   static char *kwlist[] = {"path",  NULL};
   char *path;
-  if (!PyArg_ParseTupleAndKeywords(args, kwargs, "|z", kwlist, &path))
+  if (!PyArg_ParseTupleAndKeywords(args, (PyObject *)kwargs, "|z", kwlist, &path))
     goto error;
   return make_new_directory(type, path);
  error:
@@ -114,7 +114,7 @@ directory_new(PyTypeObject *type, PyObject *args, PyObject **kwargs)
 static PyObject *
 directory_iter(DirectoryObject *dir) 
 {
-return make_new_directory_iter(NULL, dir->path);
+  return make_new_directory_iter(NULL, dir->path);
 }
 
 static PyObject *
@@ -122,7 +122,6 @@ directory_iter_next(DirectoryIterObject *di)
 {
   struct dirent entry;
   struct dirent *result;
-  static int count = 0;
   int error_code;
   Py_BEGIN_ALLOW_THREADS
   error_code = readdir_r(di->dirp, &entry, &result);
@@ -131,7 +130,7 @@ directory_iter_next(DirectoryIterObject *di)
     return PyErr_SetFromErrno(PyExc_IOError);
   
   if (result) {
-    PyObject *bye = make_new_entry(NULL, &entry, di->path);
+    PyObject *bye = make_new_entry(NULL, &entry, (PyObject *)di);
     return bye;
   }
   else {
@@ -175,15 +174,19 @@ directory_iter_repr(DirectoryObject *self) {
 PyObject *
 entry_d_name(EntryObject *self, PyObject *_) {
   if (!self->d_name) 
-    self->d_name = PyString_FromString(&self->dirent.d_name);
+    self->d_name = PyString_FromString((const char *)&self->dirent.d_name);
   Py_XINCREF(self->d_name);
   return self->d_name;
 }
 
 PyObject *
 entry_path(EntryObject *self, PyObject *_){
-  Py_INCREF(self->path);
-  return self->path;
+  DirectoryIterObject *di = (DirectoryIterObject *)self->directory_iter;
+  char *buffer = alloca(PyString_Size(di->path) + strlen((const char *)&self->dirent.d_name) + 2);
+  strcpy(buffer, PyString_AsString(di->path));
+  buffer[PyString_Size(di->path)] = '/';
+  strcpy(buffer + PyString_Size(di->path) + 1, (const char *)&self->dirent.d_name);
+  return PyString_FromString(buffer);
 }
 
 PyObject *
@@ -191,10 +194,11 @@ entry_directory(EntryObject *self, PyObject *_) {
   if (self->dirent.d_type != DT_DIR)
     Py_RETURN_NONE;
 
-  char *buffer = alloca(PyString_Size(self->path) + strlen(&self->dirent.d_name) + 2);
-  strcpy(buffer, PyString_AsString(self->path));
-  buffer[PyString_Size(self->path)] = '/';
-  strcpy(buffer + PyString_Size(self->path) + 1, &self->dirent.d_name);
+  DirectoryIterObject *di = (DirectoryIterObject *)self->directory_iter;
+  char *buffer = alloca(PyString_Size(di->path) + strlen((const char *)&self->dirent.d_name) + 2);
+  strcpy(buffer, PyString_AsString(di->path));
+  buffer[PyString_Size(di->path)] = '/';
+  strcpy(buffer + PyString_Size(di->path) + 1, (const char *)&self->dirent.d_name);
   return make_new_directory(NULL, buffer);
 }
 
@@ -241,7 +245,8 @@ entry_repr(EntryObject *self) {
   
   static const char *template = "<Entry(path=%s, d_ino=%lld, d_type=%s, d_name=%s)>";
   
-  path_repr = PyObject_Repr(self->path);
+  DirectoryIterObject *di = (DirectoryIterObject *)self->directory_iter;
+  path_repr = PyObject_Repr(di->path);
   if (!path_repr)
     goto error;
   name = entry_d_name(self, NULL);
@@ -310,7 +315,7 @@ PyTypeObject DirectoryType = {
   0, /* tp_getattr */
   0, /* tp_setattr */
   0, /* tp_cmp */
-  directory_repr, /* tp_repr */
+  (PyObject *(*)(PyObject *))directory_repr, /* tp_repr */
   0, /* tp_as_number */
   0, /* tp_as_seqeunce */
   0, /* tp_mapping */
@@ -326,7 +331,7 @@ PyTypeObject DirectoryType = {
   0, /* tp_clear */
   0, /* tp_richcompare */
   0, /* tp_weaklistoffset */
-  directory_iter, /* tp_iter */
+  (PyObject *(*)(PyObject *))directory_iter, /* tp_iter */
   0, /* tp_iternext */
   directory_methods, /* tp_methods */
   0, /* tp_members */
@@ -338,7 +343,7 @@ PyTypeObject DirectoryType = {
   0, /* tp_dictoffset */
   (initproc)directory_init, /* tp_init */
   PyType_GenericAlloc, /* tp_alloc */
-  directory_new, /* tp_new */
+  (PyObject *(*)(struct _typeobject *, PyObject *, PyObject *))directory_new, /* tp_new */
   0,
 };
 
@@ -353,7 +358,7 @@ PyTypeObject DirectoryIterType = {
   0, /* tp_getattr */
   0, /* tp_setattr */
   0, /* tp_cmp */
-  directory_iter_repr, /* tp_repr */
+  (PyObject *(*)(PyObject *))directory_iter_repr, /* tp_repr */
   0, /* tp_as_number */
   0, /* tp_as_seqeunce */
   0, /* tp_mapping */
@@ -370,7 +375,7 @@ PyTypeObject DirectoryIterType = {
   0, /* tp_richcompare */
   0, /* tp_weaklistoffset */
   PyObject_SelfIter, /* tp_iter */
-  directory_iter_next, /* tp_iternext */
+  (PyObject *(*)(PyObject *))directory_iter_next, /* tp_iternext */
   0, /* tp_methods */
   0, /* tp_members */
   0, /* tp_genset */
@@ -396,10 +401,54 @@ PyTypeObject DirectoryIterType = {
 
 PyObject *
 entry_pfind_str(EntryObject *self, PyObject *_) {
-  char *buffer = alloca(PyString_Size(self->path) + 300 ); // 256 for name, extra for number
+  DirectoryIterObject *di = (DirectoryIterObject *)self->directory_iter;
+  char *buffer = alloca(PyString_Size(di->path) + 300 ); // 256 for name, extra for number
 
-  sprintf(buffer, "%lld\t%s/%s\n", self->dirent.d_ino, PyString_AsString(self ->path), &self->dirent.d_name);
+  sprintf(buffer, "%lld\t%s/%s\n", self->dirent.d_ino, PyString_AsString(di->path), (const char *)&self->dirent.d_name);
   return PyString_FromString(buffer);
+}
+
+PyObject *
+entry_open(EntryObject *self, PyObject *_) {
+  DirectoryIterObject *di = (DirectoryIterObject *)self->directory_iter;
+  int dfd = dirfd(di->dirp);
+  int fd = -1;
+  FILE *fp = NULL;
+
+  if (dfd == -1)
+    return PyErr_SetFromErrnoWithFilename(PyExc_IOError, PyString_AsString(di->path));
+
+  PyObject *path = entry_path(self, NULL);
+  if (!path)
+    goto error;
+
+  Py_BEGIN_ALLOW_THREADS
+    fd = openat(dirfd(di->dirp), self->dirent.d_name, O_CREAT | O_RDWR, 0777);
+  Py_END_ALLOW_THREADS
+
+  if (fd == -1) {
+    PyErr_SetFromErrnoWithFilename(PyExc_IOError, PyString_AsString(path));
+    goto error;
+  }
+  fp = fdopen(fd, "r+");
+  if (!fp) {
+    PyErr_SetFromErrnoWithFilename(PyExc_IOError, PyString_AsString(path));
+    goto error;
+  }
+
+  PyObject *file = PyFile_FromFile(fp, PyString_AsString(path), "r+", fclose);
+  Py_DECREF(path);
+  return file;
+
+ error:
+  Py_XDECREF(path);
+
+  if (fp) {
+    Py_BEGIN_ALLOW_THREADS
+    fclose(fp);
+    Py_END_ALLOW_THREADS
+  }
+  return NULL;
 }
 
 PyObject *
@@ -446,6 +495,7 @@ static PyMethodDef entry_methods[] = {
   {"path", (PyCFunction)entry_path, METH_NOARGS, NULL},
   {"directory", (PyCFunction)entry_directory, METH_NOARGS, NULL},
   {"pfind_str", (PyCFunction)entry_pfind_str, METH_NOARGS, NULL},
+  {"open", (PyCFunction)entry_open, METH_NOARGS, NULL},
   {NULL, NULL}};
 
 PyTypeObject EntryType = {
@@ -458,10 +508,10 @@ PyTypeObject EntryType = {
   0, /* tp_getattr */
   0, /* tp_setattr */
   0, /* tp_cmp */
-  entry_repr, /* tp_repr */
+  (PyObject *(*)(PyObject *))entry_repr, /* tp_repr */
   0, /* tp_as_number */
   0, /* tp_as_seqeunce */
-    0, /* tp_mapping */
+  0, /* tp_mapping */
   (hashfunc)PyObject_HashNotImplemented, /*tp_hash */
   0, /* tp_call */
   0, /* tp_str */
@@ -491,19 +541,19 @@ PyTypeObject EntryType = {
 };
 
 PyObject *
-make_new_entry(PyTypeObject *type, struct dirent *entry, PyObject *path) {
+make_new_entry(PyTypeObject *type, struct dirent *entry, PyObject *directory_iter) {
   EntryObject *entry_object = PyObject_New(EntryObject, &EntryType);
   if (!entry_object) 
     goto error;
 
   memcpy(&entry_object->dirent, entry, sizeof(struct dirent));
+  entry_object->directory_iter = directory_iter;
+  Py_INCREF(directory_iter);
   entry_object->d_ino = NULL;
   entry_object->d_type = NULL;
   entry_object->d_type = NULL;
   entry_object->d_name = NULL;
-  entry_object->path = path;
-  Py_INCREF(path);
-return entry_object;
+  return (PyObject *)entry_object;
  error:
   return NULL;
 }
@@ -531,7 +581,7 @@ make_new_directory(PyTypeObject *type, char *path) {
       
   directory->path = path_object;
   directory->dirp = -1;
-  return directory;
+  return (PyObject *)directory;
  error:
   Py_XDECREF(path_object);
   Py_XDECREF(directory);
@@ -568,7 +618,7 @@ make_new_directory_iter(PyTypeObject *type, PyObject *path_object) {
   directory_iter->dirp = dir;
   Py_INCREF(path_object);
   directory_iter->path = path_object;
-  return directory_iter;
+  return (PyObject *)directory_iter;
  unix_error:
   if (path_object)
     PyErr_SetFromErrnoWithFilename(PyExc_IOError, PyString_AsString(path_object));
